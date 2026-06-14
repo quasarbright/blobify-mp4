@@ -54,7 +54,7 @@ npx tsx src/cli.ts <input> <output> [options]
 
 | Flag | | Description | Default |
 |------|---|-------------|---------|
-| `--palette-size` | `-p` | Palette size, 2–256 | `32` |
+| `--palette-size` | `-p` | Palette size, 2–256 | `16` |
 | `--uniform`      |      | Use a fixed uniform RGB-grid palette instead of the adaptive one | adaptive |
 | `--iterations`   | `-i` | Automaton steps per frame; more = blobbier everywhere | `10` |
 | `--dither`       | `-d` | `ordered` or `nearest` | `ordered` |

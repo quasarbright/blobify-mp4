@@ -28,7 +28,7 @@ Usage:
   blobify <input> <output> [options]
 
 Options:
-  -p, --palette-size <n>   palette size 2-256          (default 32)
+  -p, --palette-size <n>   palette size 2-256          (default 16)
       --uniform            use a fixed uniform RGB-grid palette instead of an
                            adaptive palette derived from the video's own colors
   -i, --iterations <n>     automaton steps per frame; more = blobbier (default 10)
@@ -69,7 +69,7 @@ function parseOptions(argv: string[]): Options {
     fail(`Invalid --dither "${dither}". Use "ordered" or "nearest".`);
   }
 
-  const paletteSize = clamp(intOpt(values["palette-size"], "palette-size", 32), 2, 256);
+  const paletteSize = clamp(intOpt(values["palette-size"], "palette-size", 16), 2, 256);
   const iterations = Math.max(0, intOpt(values.iterations, "iterations", 10));
   const crf = clamp(intOpt(values.crf, "crf", 18), 0, 51);
   const fps = values.fps === undefined ? null : numOpt(values.fps, "fps");
