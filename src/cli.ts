@@ -28,7 +28,7 @@ Usage:
 
 Options:
   -p, --palette-size <n>   palette size 2-256          (default 32)
-  -i, --iterations <n>     automaton steps per frame   (default 10)
+  -i, --iterations <n>     automaton steps per frame; more = blobbier (default 10)
   -d, --dither <mode>      ordered | nearest            (default ordered)
       --crf <n>            x264 quality, lower=better   (default 18)
       --fps <n>            override output fps          (default: source fps)

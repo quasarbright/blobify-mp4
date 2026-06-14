@@ -54,7 +54,7 @@ npx tsx src/cli.ts <input> <output> [options]
 | Flag | | Description | Default |
 |------|---|-------------|---------|
 | `--palette-size` | `-p` | Palette size, 2–256 | `32` |
-| `--iterations`   | `-i` | Automaton steps per frame | `10` |
+| `--iterations`   | `-i` | Automaton steps per frame; more = blobbier everywhere | `10` |
 | `--dither`       | `-d` | `ordered` or `nearest` | `ordered` |
 | `--crf`          |      | x264 quality (lower = better) | `18` |
 | `--fps`          |      | Override output fps | source fps |
@@ -71,8 +71,9 @@ npx tsx src/cli.ts <input> <output> [options]
 blobify input.mp4 blobified.mp4 -p 16 -i 20 -d ordered
 ```
 
-More iterations and smaller palettes produce larger, smoother blobs. Audio from the input is copied
-into the output unchanged.
+More iterations make the result blobbier everywhere — each step lets the majority vote grow regions
+outward, so blobs get larger and smoother across the whole frame. Smaller palettes give chunkier,
+flatter color regions. Audio from the input is copied into the output unchanged.
 
 ## How it works
 
