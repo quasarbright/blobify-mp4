@@ -75,9 +75,9 @@ and background tones), neighboring pixels dither to similar colors and the autom
 gently — the result looks natural but **less blobby**. For bolder regions with natural-ish colors, use
 a **smaller** palette (e.g. `-p 12`) and/or more `--iterations`.
 
-Pass `--uniform` to use the original fixed palette instead: a grayscale ramp for sizes ≤ 8, or a
-uniform RGB-cube grid for larger sizes. This gives the boldest blobs but can push real-world colors
-toward odd hues (skin → grid red).
+Pass `--uniform` to use a fixed palette instead: a uniform RGB-cube grid (per-channel quantization,
+always in color). This gives the boldest blobs but can push real-world colors toward odd hues
+(skin → grid red).
 
 ### Example
 

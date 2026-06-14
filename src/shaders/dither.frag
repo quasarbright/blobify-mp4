@@ -63,69 +63,30 @@ void main() {
     
     vec3 dithered;
     
+    // Per-channel RGB quantization onto a uniform color cube. The number of levels per channel is
+    // the cube root of the palette size, so the palette is always in color (never grayscale).
+    float levelsPerChannel = ceil(pow(u_paletteSize, 1.0 / 3.0));
+    float steps = max(levelsPerChannel - 1.0, 1.0);
+
     if (u_ditherMode == 1) {
-        // Naive nearest-neighbor dithering
-        // Simply quantize each pixel to the nearest palette color
-        
-        if (u_paletteSize <= 8.0) {
-            // Grayscale quantization for small palettes
-            float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-            float levels = u_paletteSize - 1.0;
-            float quantized = floor(gray * levels + 0.5) / levels;
-            dithered = vec3(clamp(quantized, 0.0, 1.0));
-        } else {
-            // Per-channel quantization for larger palettes
-            float levelsPerChannel = ceil(pow(u_paletteSize, 1.0 / 3.0));
-            float steps = levelsPerChannel - 1.0;
-            
-            dithered.r = floor(color.r * steps + 0.5) / steps;
-            dithered.g = floor(color.g * steps + 0.5) / steps;
-            dithered.b = floor(color.b * steps + 0.5) / steps;
-            dithered = clamp(dithered, 0.0, 1.0);
-        }
+        // Naive nearest-neighbor: quantize each channel to the nearest cube level.
+        dithered.r = floor(color.r * steps + 0.5) / steps;
+        dithered.g = floor(color.g * steps + 0.5) / steps;
+        dithered.b = floor(color.b * steps + 0.5) / steps;
+        dithered = clamp(dithered, 0.0, 1.0);
     } else {
-        // Ordered dithering (Bayer matrix)
-        
-        // Get pixel coordinates
-        vec2 pixelCoord = v_texCoord * u_resolution;
-        
-        // Get Bayer threshold value (normalized to 0-1)
-        float threshold = getBayerValue(pixelCoord) / 64.0;
-        
-        if (u_paletteSize <= 8.0) {
-            // Convert to grayscale using luminance formula
-            float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-            
-            // Calculate number of gray levels
-            float levels = u_paletteSize - 1.0;
-            
-            // Apply dithering
-            float ditheredGray = gray + (threshold - 0.5) / levels;
-            
-            // Quantize
-            ditheredGray = floor(ditheredGray * levels + 0.5) / levels;
-            ditheredGray = clamp(ditheredGray, 0.0, 1.0);
-            
-            dithered = vec3(ditheredGray);
-        } else {
-            // For larger palettes, use per-channel quantization
-            // Calculate quantization levels per channel
-            float levelsPerChannel = ceil(pow(u_paletteSize, 1.0 / 3.0));
-            float steps = levelsPerChannel - 1.0;
-            
-            // Apply ordered dithering to each color channel
-            dithered.r = color.r + (threshold - 0.5) / steps;
-            dithered.g = color.g + (threshold - 0.5) / steps;
-            dithered.b = color.b + (threshold - 0.5) / steps;
-            
-            // Quantize to palette (round to nearest level)
-            dithered.r = floor(dithered.r * steps + 0.5) / steps;
-            dithered.g = floor(dithered.g * steps + 0.5) / steps;
-            dithered.b = floor(dithered.b * steps + 0.5) / steps;
-            
-            // Clamp to valid range
-            dithered = clamp(dithered, 0.0, 1.0);
-        }
+        // Ordered dithering (Bayer matrix): perturb each channel before quantizing.
+        float threshold = getBayerValue(v_texCoord * u_resolution) / 64.0;
+
+        dithered.r = color.r + (threshold - 0.5) / steps;
+        dithered.g = color.g + (threshold - 0.5) / steps;
+        dithered.b = color.b + (threshold - 0.5) / steps;
+
+        dithered.r = floor(dithered.r * steps + 0.5) / steps;
+        dithered.g = floor(dithered.g * steps + 0.5) / steps;
+        dithered.b = floor(dithered.b * steps + 0.5) / steps;
+
+        dithered = clamp(dithered, 0.0, 1.0);
     }
     
     gl_FragColor = vec4(dithered, color.a);
