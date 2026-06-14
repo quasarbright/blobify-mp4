@@ -1,0 +1,32 @@
+{
+  "name": "blobify-mp4",
+  "version": "1.0.0",
+  "description": "GPU-accelerated CLI that applies a dither + majority-vote cellular automaton effect to every frame of a video",
+  "type": "module",
+  "bin": {
+    "blobify": "dist/cli.js"
+  },
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc && npm run copy-shaders",
+    "copy-shaders": "node -e \"import('node:fs').then(fs=>fs.cpSync('src/shaders','dist/shaders',{recursive:true}))\"",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js"
+  },
+  "keywords": [
+    "webgl",
+    "dithering",
+    "cellular-automaton",
+    "video",
+    "ffmpeg"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "gl": "^8.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
