@@ -21,6 +21,8 @@ export interface ProcessOptions {
   paletteSize: number;
   iterations: number;
   ditherMode: DitherMode;
+  /** Use the content-derived palette (set via setPalette) instead of the uniform RGB grid. */
+  adaptive: boolean;
 }
 
 export class Renderer {
@@ -29,9 +31,14 @@ export class Renderer {
   private readonly height: number;
 
   private readonly ditherProgram: WebGLProgram;
+  private readonly adaptiveDitherProgram: WebGLProgram;
   private readonly automatonProgram: WebGLProgram;
 
   private readonly quadBuffer: WebGLBuffer;
+
+  // Adaptive palette: 256x1 RGBA texture; only the first `paletteCount` texels are valid.
+  private readonly paletteTexture: WebGLTexture;
+  private paletteCount = 0;
 
   // Input frame texture (re-uploaded each frame).
   private readonly inputTexture: WebGLTexture;
@@ -63,6 +70,10 @@ export class Renderer {
       vertexSrc,
       readFileSync(join(SHADER_DIR, "dither.frag"), "utf8")
     );
+    this.adaptiveDitherProgram = this.createProgram(
+      vertexSrc,
+      readFileSync(join(SHADER_DIR, "dither-adaptive.frag"), "utf8")
+    );
     this.automatonProgram = this.createProgram(
       vertexSrc,
       readFileSync(join(SHADER_DIR, "automaton.frag"), "utf8")
@@ -78,7 +89,20 @@ export class Renderer {
     this.pingFbo = this.createFramebuffer(this.pingTexture);
     this.pongFbo = this.createFramebuffer(this.pongTexture);
 
+    this.paletteTexture = this.createRenderTexture();
+
     this.pixels = new Uint8Array(width * height * 4);
+  }
+
+  /**
+   * Upload an adaptive palette for use by the adaptive dither path. `data` is 256*4 RGBA bytes;
+   * only the first `count` entries are treated as valid.
+   */
+  setPalette(data: Uint8Array, count: number): void {
+    const gl = this.gl;
+    this.paletteCount = count;
+    gl.bindTexture(gl.TEXTURE_2D, this.paletteTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
   }
 
   /**
@@ -96,15 +120,26 @@ export class Renderer {
     this.uploadFrame(frame);
 
     // 1. Dither the input texture into the ping buffer.
-    this.runPass(this.ditherProgram, this.inputTexture, this.pingFbo, (program) => {
-      gl.uniform1i(gl.getUniformLocation(program, "u_image"), 0);
-      gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), this.width, this.height);
-      gl.uniform1f(gl.getUniformLocation(program, "u_paletteSize"), opts.paletteSize);
-      gl.uniform1i(
-        gl.getUniformLocation(program, "u_ditherMode"),
-        opts.ditherMode === "nearest" ? 1 : 0
-      );
-    });
+    const ditherMode = opts.ditherMode === "nearest" ? 1 : 0;
+    if (opts.adaptive) {
+      this.runPass(this.adaptiveDitherProgram, this.inputTexture, this.pingFbo, (program) => {
+        gl.uniform1i(gl.getUniformLocation(program, "u_image"), 0);
+        gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), this.width, this.height);
+        gl.uniform1i(gl.getUniformLocation(program, "u_ditherMode"), ditherMode);
+        gl.uniform1i(gl.getUniformLocation(program, "u_paletteCount"), this.paletteCount);
+        // Bind the palette to texture unit 1; runPass binds the source to unit 0 afterwards.
+        gl.uniform1i(gl.getUniformLocation(program, "u_palette"), 1);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this.paletteTexture);
+      });
+    } else {
+      this.runPass(this.ditherProgram, this.inputTexture, this.pingFbo, (program) => {
+        gl.uniform1i(gl.getUniformLocation(program, "u_image"), 0);
+        gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), this.width, this.height);
+        gl.uniform1f(gl.getUniformLocation(program, "u_paletteSize"), opts.paletteSize);
+        gl.uniform1i(gl.getUniformLocation(program, "u_ditherMode"), ditherMode);
+      });
+    }
 
     // 2. Run N automaton steps, ping-ponging between buffers.
     let srcTex = this.pingTexture;
@@ -140,11 +175,13 @@ export class Renderer {
   dispose(): void {
     const gl = this.gl;
     gl.deleteProgram(this.ditherProgram);
+    gl.deleteProgram(this.adaptiveDitherProgram);
     gl.deleteProgram(this.automatonProgram);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteTexture(this.inputTexture);
     gl.deleteTexture(this.pingTexture);
     gl.deleteTexture(this.pongTexture);
+    gl.deleteTexture(this.paletteTexture);
     gl.deleteFramebuffer(this.pingFbo);
     gl.deleteFramebuffer(this.pongFbo);
     const ext = gl.getExtension("STACKGL_destroy_context") as

@@ -7,7 +7,7 @@
 import { parseArgs } from "node:util";
 import { once } from "node:events";
 import { Renderer, type DitherMode } from "./renderer.js";
-import { probe, spawnDecoder, spawnEncoder } from "./video.js";
+import { probe, spawnDecoder, spawnEncoder, generatePalette } from "./video.js";
 
 interface Options {
   input: string;
@@ -19,6 +19,7 @@ interface Options {
   fps: number | null;
   scale: number | null;
   maxFrames: number | null;
+  adaptive: boolean;
 }
 
 const USAGE = `blobify — blobify a video with a dither + majority-vote cellular automaton
@@ -28,6 +29,8 @@ Usage:
 
 Options:
   -p, --palette-size <n>   palette size 2-256          (default 32)
+      --uniform            use a fixed uniform RGB-grid palette instead of an
+                           adaptive palette derived from the video's own colors
   -i, --iterations <n>     automaton steps per frame; more = blobbier (default 10)
   -d, --dither <mode>      ordered | nearest            (default ordered)
       --crf <n>            x264 quality, lower=better   (default 18)
@@ -43,6 +46,7 @@ function parseOptions(argv: string[]): Options {
     allowPositionals: true,
     options: {
       "palette-size": { type: "string", short: "p" },
+      uniform: { type: "boolean" },
       iterations: { type: "string", short: "i" },
       dither: { type: "string", short: "d" },
       crf: { type: "string" },
@@ -92,6 +96,7 @@ function parseOptions(argv: string[]): Options {
     fps,
     scale,
     maxFrames,
+    adaptive: !values.uniform,
   };
 }
 
@@ -125,13 +130,24 @@ async function main(): Promise<void> {
   const outputFps = opts.fps ?? info.fps;
   const frameBytes = width * height * 4;
 
+  const renderer = new Renderer(width, height);
+
+  // Build the adaptive palette from the whole source up front, then upload it to the renderer.
+  let paletteDesc: string;
+  if (opts.adaptive) {
+    const { data, count } = await generatePalette(opts.input, opts.paletteSize);
+    renderer.setPalette(data, count);
+    paletteDesc = `palette=adaptive(${count})`;
+  } else {
+    paletteDesc = `palette=uniform(${opts.paletteSize})`;
+  }
+
   process.stderr.write(
     `blobify: ${width}x${height}${scaled ? ` (from ${info.width}x${info.height})` : ""} ` +
       `@ ${outputFps.toFixed(3)}fps${totalFrames ? ` (${totalFrames} frames)` : ""}, ` +
-      `palette=${opts.paletteSize} iterations=${opts.iterations} dither=${opts.ditherMode}\n`
+      `${paletteDesc} iterations=${opts.iterations} dither=${opts.ditherMode}\n`
   );
 
-  const renderer = new Renderer(width, height);
   const decoder = spawnDecoder(opts.input, {
     width: scaled ? width : undefined,
     height: scaled ? height : undefined,

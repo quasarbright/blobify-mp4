@@ -3,7 +3,8 @@
 A GPU-accelerated CLI that applies a **dither + majority-vote cellular automaton** effect to every
 frame of a video, producing a blobby, stained-glass "modern art" look.
 
-Each frame is dithered down to a small color palette, then run through a cellular automaton where
+Each frame is dithered down to a small color palette — by default an **adaptive palette derived from
+the video's own colors** so the result stays natural — then run through a cellular automaton where
 every cell becomes the most common color among its 8 neighbors (ties broken randomly). Iterating this
 merges the dithered noise into organic colored blobs. It's a port of
 [image-majority-automaton](https://github.com/quasarbright/quasarbright.github.io/tree/master/p5js/image-majority-automaton)
@@ -54,6 +55,7 @@ npx tsx src/cli.ts <input> <output> [options]
 | Flag | | Description | Default |
 |------|---|-------------|---------|
 | `--palette-size` | `-p` | Palette size, 2–256 | `32` |
+| `--uniform`      |      | Use a fixed uniform RGB-grid palette instead of the adaptive one | adaptive |
 | `--iterations`   | `-i` | Automaton steps per frame; more = blobbier everywhere | `10` |
 | `--dither`       | `-d` | `ordered` or `nearest` | `ordered` |
 | `--crf`          |      | x264 quality (lower = better) | `18` |
@@ -62,8 +64,20 @@ npx tsx src/cli.ts <input> <output> [options]
 | `--frames`       | `-n` | Process only the first N frames (quick preview) | all |
 | `--help`         | `-h` | Show help | |
 
-> **Note:** palettes of 8 or fewer colors use a grayscale path (matching the reference); larger
-> palettes quantize per RGB channel.
+### Palette
+
+By default blobify builds an **adaptive palette** from the video's own colors (via ffmpeg's
+`palettegen`, computed once over the whole clip), so faces and scenes keep natural, recognizable
+colors. `--palette-size` sets the target number of colors (`palette=adaptive(N)` in the log).
+
+Because an adaptive palette clusters around the colors that are actually present (lots of similar skin
+and background tones), neighboring pixels dither to similar colors and the automaton merges them more
+gently — the result looks natural but **less blobby**. For bolder regions with natural-ish colors, use
+a **smaller** palette (e.g. `-p 12`) and/or more `--iterations`.
+
+Pass `--uniform` to use the original fixed palette instead: a grayscale ramp for sizes ≤ 8, or a
+uniform RGB-cube grid for larger sizes. This gives the boldest blobs but can push real-world colors
+toward odd hues (skin → grid red).
 
 ### Example
 

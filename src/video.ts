@@ -130,6 +130,66 @@ function parseFraction(value: unknown): number {
   return n / d;
 }
 
+export interface Palette {
+  /** 256*4 RGBA bytes; the first `count` entries are the palette, the rest are zero. */
+  data: Uint8Array;
+  count: number;
+}
+
+/**
+ * Compute an adaptive palette from the whole video using ffmpeg's `palettegen`. The filter emits a
+ * single 16x16 RGBA frame (256 texels) containing up to `maxColors` unique colors. We collect the
+ * raw bytes, dedupe to the distinct colors, and pack them into the front of a 256-entry buffer.
+ */
+export async function generatePalette(input: string, maxColors: number): Promise<Palette> {
+  const raw = await runBinary("ffmpeg", [
+    "-nostdin",
+    "-loglevel", "error",
+    "-i", input,
+    "-vf", `palettegen=max_colors=${maxColors}`,
+    "-f", "rawvideo",
+    "-pix_fmt", "rgba",
+    "-",
+  ]);
+
+  const data = new Uint8Array(256 * 4);
+  const seen = new Set<number>();
+  let count = 0;
+  for (let i = 0; i + 3 < raw.length && count < 256; i += 4) {
+    const r = raw[i], g = raw[i + 1], b = raw[i + 2];
+    const key = (r << 16) | (g << 8) | b;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const o = count * 4;
+    data[o] = r;
+    data[o + 1] = g;
+    data[o + 2] = b;
+    data[o + 3] = 255;
+    count++;
+  }
+
+  if (count === 0) throw new Error(`palettegen produced no colors for ${input}`);
+  return { data, count };
+}
+
+function runBinary(cmd: string, args: string[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const chunks: Buffer[] = [];
+    let err = "";
+    child.stdout.on("data", (d) => chunks.push(d as Buffer));
+    child.stderr.on("data", (d) => (err += d));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`${cmd} exited with code ${code}: ${err.trim()}`));
+        return;
+      }
+      resolve(Buffer.concat(chunks));
+    });
+  });
+}
+
 function runJson(cmd: string, args: string[]): Promise<any> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
